@@ -7,5 +7,5 @@
 #PBS -q short_cpuQ
 
 module load mpich-3.2
-cd ./mandelbrot
-mpirun.actual -n 4 ./mandelbrot 16 100 #number of zooms, number of threads
+cd ./HPC4DS-Project
+mpirun.actual -n 4 ./mandelbrot 4 100 #number of zooms, number of threads
