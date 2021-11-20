@@ -35,10 +35,10 @@ int main(int argc, char *argv[])
 
         /* screen ( integer) coordinate */
         int iX, iY;
-        const int iXmax = 40;
-        const int iYmax = 40;
+        const int iXmax = 800;
+        const int iYmax = 800;
         /* world ( double) coordinate = parameter plane*/
-        double Cx, Cy;
+        double Cx,Cy;
         const double CxMin = -1.0;
         const double CxMax = 1.0;
         const double CyMin = -1.0;
@@ -50,42 +50,43 @@ int main(int argc, char *argv[])
         /* it is 24 bit color RGB file */
         const int MaxColorComponentValue = 255;
         
-        //FILE *fp;
-        //char *filename = "new1.ppm";
-        //char *comment = "# "; /* comment should start with # */
-        static unsigned char color[3];  //OCCHIO ALLO STATIC
-        unsigned char ppmMatrix[iXmax][iYmax][3];
+        
+        unsigned int color[3];
+        unsigned int ppmMatrix[iXmax][iYmax][3];
+        for (iY = 0; iY < iYmax; iY++) {
+            for (iX = 0; iX < iYmax; iX++) {
+                for (int i=0; i<3; i++) {
+                    ppmMatrix[iY][iX][i]=0;
+                }
+            }
+        }
 
 
-        /* Z=Zx+Zy*i  ;   Z0 = 0 */
+        // Z=Zx+Zy*i  ;   Z0 = 0
         double Zx, Zy;
-        double Zx2, Zy2; /* Zx2=Zx*Zx;  Zy2=Zy*Zy  */
-        /*  */
+        double Zx2, Zy2; // Zx2=Zx*Zx;  Zy2=Zy*Zy
+        //
         int Iteration;
-        const int IterationMax = 50;
-        /* bail-out value , radius of circle ;  */
+        const int IterationMax = 500;
+        // bail-out value , radius of circle ;
         const double EscapeRadius = 100;
         double ER2 = EscapeRadius * EscapeRadius;
-        /*create new file,give it a name and open it in binary mode  */
-        //fp = fopen(filename, "wb"); /* b -  binary mode */
-        /*write ASCII header to the file*/
-        //fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
-        /* compute and write image data bytes to the file*/
-        printf("INIZIO FOR");
-        for (iY = my_rank; iY < iYmax; iY+comm_sz)
+        
+        //compute and write image data bytes to the file
+        for (iY = my_rank; iY < iYmax; iY+=comm_sz)
         {
             Cy = CyMin + iY * PixelHeight;
             if (fabs(Cy) < PixelHeight / 2)
-                Cy = 0.0; /* Main antenna */
+                Cy = 0.0; // Main antenna
             for (iX = 0; iX < iXmax; iX++)
             {
                 Cx = CxMin + iX * PixelWidth;
-                /* initial value of orbit = critical point Z= 0 */
+                // initial value of orbit = critical point Z= 0
                 Zx = 0.0;
                 Zy = 0.0;
                 Zx2 = Zx * Zx;
                 Zy2 = Zy * Zy;
-                /* */
+                //
                 for (Iteration = 0; Iteration < IterationMax && ((Zx2 + Zy2) < ER2); Iteration++)
                 {
                     Zy = 2 * Zx * Zy + Cy;
@@ -123,24 +124,44 @@ int main(int argc, char *argv[])
                         color[2] = 255;
                     }
                 }
-                /*write color to the file*/
-                //fwrite(color, 1, 3, fp);
+                
                 for (int i=0; i<3; i++) {
                     ppmMatrix[iY][iX][i] = color[i];
                 }
             }
         }
-        printf("FINE FOR\n");
-        //fclose(fp);
-        for(int iY=my_rank; iY<iYmax; iY+comm_sz) {
-            for(int iX=0; iX<iXmax; iX++) {
-                for(int i=0; i<3; i++) {
-                    printf("%c,", ppmMatrix[iX][iY][i]);
+
+        //MPI_REDUCE
+        unsigned int GLOBALppmMatrix[iXmax][iYmax][3];
+        MPI_Reduce( ppmMatrix , GLOBALppmMatrix , iYmax*iXmax*3 , MPI_INT , MPI_SUM , my_master , MPI_COMM_WORLD);
+
+        //WRITE TO FILE
+        if (my_rank == my_master)
+        {            
+            FILE *fp;
+            char filename[30];
+            sprintf(filename, "zoom%d.ppm", actual_zoom);
+            char *comment = "# "; //comment should start with #
+            //create new file,give it a name and open it in binary mode
+            fp = fopen(filename, "wb"); // b -  binary mode
+            //write ASCII header to the file
+            fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
+            unsigned char CHARcolor[3];
+            for (iY = 0; iY < iYmax; iY++) {
+                for (iX = 0; iX < iYmax; iX++) {
+                    //write color to the file
+                    for (int i=0; i<3; i++) {
+                        CHARcolor[i] = GLOBALppmMatrix[iY][iX][i];
+                    }
+                    fwrite(CHARcolor, 1, 3, fp);
                 }
-                printf("\t");
             }
-            printf("\n");
+                    
+            fclose(fp);
         }
+        
+        
+        
     }
 
     MPI_Finalize();
