@@ -33,34 +33,45 @@ int main(int argc, char *argv[])
         int my_master = my_rank - my_rank % proc_per_zoom;
         printf("Process %d working on zoom %d with master %d\n", my_rank, actual_zoom, my_master);
 
+        // creazione communicators gropus
+        int working_frame = my_rank / proc_per_zoom;
+        MPI_Comm frame_comm;
+        MPI_Comm_split(MPI_COMM_WORLD, working_frame, comm_sz, &frame_comm);
+        int frame_rank, frame_size;
+        MPI_Comm_rank(frame_comm, &frame_rank);
+        MPI_Comm_size(frame_comm, &frame_size);
+        int frame_maser = frame_rank - frame_rank % proc_per_zoom;
+
+        printf("frame_size: %d - frame_rank: %d frame_maser: %d\n", frame_size, frame_rank, frame_maser);
+
         /* screen ( integer) coordinate */
         int iX, iY;
         const int iXmax = 800;
         const int iYmax = 800;
         /* world ( double) coordinate = parameter plane*/
-        double Cx,Cy;
-        const double CxMin = -1.0;
-        const double CxMax = 1.0;
-        const double CyMin = -1.0;
-        const double CyMax = 1.0;
+        double Cx, Cy;
+        const double CxMin = -2.5;
+        const double CxMax = 1.5;
+        const double CyMin = -2.0;
+        const double CyMax = 2.0;
         /* */
         double PixelWidth = (CxMax - CxMin) / iXmax;
         double PixelHeight = (CyMax - CyMin) / iYmax;
         /* color component ( R or G or B) is coded from 0 to 255 */
         /* it is 24 bit color RGB file */
         const int MaxColorComponentValue = 255;
-        
-        
         unsigned int color[3];
         unsigned int ppmMatrix[iXmax][iYmax][3];
-        for (iY = 0; iY < iYmax; iY++) {
-            for (iX = 0; iX < iYmax; iX++) {
-                for (int i=0; i<3; i++) {
-                    ppmMatrix[iY][iX][i]=0;
+        for (iY = 0; iY < iYmax; iY++)
+        {
+            for (iX = 0; iX < iYmax; iX++)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    ppmMatrix[iY][iX][i] = 0;
                 }
             }
         }
-
 
         // Z=Zx+Zy*i  ;   Z0 = 0
         double Zx, Zy;
@@ -71,9 +82,9 @@ int main(int argc, char *argv[])
         // bail-out value , radius of circle ;
         const double EscapeRadius = 100;
         double ER2 = EscapeRadius * EscapeRadius;
-        
+
         //compute and write image data bytes to the file
-        for (iY = my_rank; iY < iYmax; iY+=comm_sz)
+        for (iY = frame_rank; iY < iYmax; iY += frame_size)
         {
             Cy = CyMin + iY * PixelHeight;
             if (fabs(Cy) < PixelHeight / 2)
@@ -124,8 +135,9 @@ int main(int argc, char *argv[])
                         color[2] = 255;
                     }
                 }
-                
-                for (int i=0; i<3; i++) {
+
+                for (int i = 0; i < 3; i++)
+                {
                     ppmMatrix[iY][iX][i] = color[i];
                 }
             }
@@ -133,11 +145,11 @@ int main(int argc, char *argv[])
 
         //MPI_REDUCE
         unsigned int GLOBALppmMatrix[iXmax][iYmax][3];
-        MPI_Reduce( ppmMatrix , GLOBALppmMatrix , iYmax*iXmax*3 , MPI_INT , MPI_SUM , my_master , MPI_COMM_WORLD);
+        MPI_Reduce(ppmMatrix, GLOBALppmMatrix, iYmax * iXmax * 3, MPI_INT, MPI_SUM, frame_maser, frame_comm);
 
         //WRITE TO FILE
         if (my_rank == my_master)
-        {            
+        {
             FILE *fp;
             char filename[30];
             sprintf(filename, "zoom%d.ppm", actual_zoom);
@@ -147,21 +159,24 @@ int main(int argc, char *argv[])
             //write ASCII header to the file
             fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
             unsigned char CHARcolor[3];
-            for (iY = 0; iY < iYmax; iY++) {
-                for (iX = 0; iX < iYmax; iX++) {
+            for (iY = 0; iY < iYmax; iY++)
+            {
+                for (iX = 0; iX < iYmax; iX++)
+                {
                     //write color to the file
-                    for (int i=0; i<3; i++) {
+                    for (int i = 0; i < 3; i++)
+                    {
                         CHARcolor[i] = GLOBALppmMatrix[iY][iX][i];
                     }
                     fwrite(CHARcolor, 1, 3, fp);
                 }
             }
-                    
+
             fclose(fp);
         }
-        
-        
-        
+
+        // finalize the frame_comm comunicator
+        MPI_Comm_free(&frame_comm);
     }
 
     MPI_Finalize();
