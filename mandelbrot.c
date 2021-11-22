@@ -63,13 +63,6 @@ int main(int argc, char *argv[])
 
     argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
-    //printf("%d %d %d %lf %lf\n", arguments.threads, arguments.zoom, arguments.zoom_factor, arguments.final_x, arguments.final_y);
-
-    //return 0;
-
-    //int NUM_ZOOMS = strtod(argv[1], NULL);
-    //int NUM_THREADS = strtod(argv[2], NULL);
-
     int my_rank, comm_sz;
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
