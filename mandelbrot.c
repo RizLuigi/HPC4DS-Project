@@ -3,9 +3,28 @@
 #include <mpi.h>
 //#include <omp.h>
 #include <math.h>
+#include <argp.h>
+
+static int parse_opt (int key, char* arg, struct argp_state *state)
+{
+    switch (key)
+    {
+    case 'z':
+        printf("Option --zoom used");
+        break;
+    }
+    return 0;
+}
+
+struct argp_option options[] =
+    {
+        {'threads', 't', 0, 0, "Use zoom"},
+        {0 }
+    };
+struct argp argp = {options, parse_opt}
 
 int main(int argc, char *argv[])
-{
+{    
     int NUM_ZOOMS = strtod(argv[1], NULL);
     int NUM_THREADS = strtod(argv[2], NULL);
 
