@@ -5,26 +5,68 @@
 #include <math.h>
 #include <argp.h>
 
-static int parse_opt (int key, char* arg, struct argp_state *state)
+struct argp_option options[] =
 {
+    {"threads", 't', "threadCount", 0, "Use threadCount threads per process"},
+    {"zooms", 'z', "zoomCount", 0 , "Create zoomCount images"},
+    {"zoom-factor", 'f', "zoomFactor", 0, "Use zoomFactor as magnification factor"},
+    {"final-x", 'x', "X", 0, "Use X as final x-coordinate"},
+    {"final-y", 'y', "Y", 0, "Use Y as final y-coordinate"},
+    {0 }
+};
+
+struct arguments
+{
+  int threads, zoom, zoom_factor;
+  double final_x, final_y;
+};
+
+static int parse_opt (int key, char* arg, struct argp_state *state)
+{   
+    struct arguments *arguments = state->input;
+
     switch (key)
     {
-    case 'z':
-        printf("Option --zoom used");
+    case 't':
+        arguments->threads = atoi(arg);
         break;
+    case 'z':
+        arguments->zoom = atoi(arg);
+        break;
+    case 'f':
+        arguments->zoom_factor = atoi(arg);
+        break;
+    case 'x':
+        arguments->final_x = atoi(arg);
+        break;
+    case 'y':
+        arguments->final_y = atoi(arg);
+        break;
+    default:
+      return ARGP_ERR_UNKNOWN;
     }
     return 0;
 }
 
-struct argp_option options[] =
-    {
-        {'threads', 't', 0, 0, "Use zoom"},
-        {0 }
-    };
-struct argp argp = {options, parse_opt}
+static struct argp argp = {options, parse_opt};
 
 int main(int argc, char *argv[])
-{    
+{
+    struct arguments arguments;
+
+    // DEFAULTS
+    arguments.threads = 10;
+    arguments.zoom = 4;
+    arguments.zoom_factor = 5;
+    arguments.final_x = -0.7;
+    arguments.final_y = 0.26;
+
+    argp_parse (&argp, argc, argv, 0, 0, &arguments);
+
+    printf("%d %d %d %lf %lf\n", arguments.threads, arguments.zoom, arguments.zoom_factor, arguments.final_x, arguments.final_y);
+
+    return 0;
+
     int NUM_ZOOMS = strtod(argv[1], NULL);
     int NUM_THREADS = strtod(argv[2], NULL);
 
