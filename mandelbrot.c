@@ -50,6 +50,9 @@ static int parse_opt (int key, char* arg, struct argp_state *state)
 
 static struct argp argp = {options, parse_opt};
 
+int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2);
+void colorFromIterations(int Iteration, int IterationMax, unsigned int* color);
+
 int main(int argc, char *argv[])
 {
     struct arguments arguments;
@@ -63,24 +66,17 @@ int main(int argc, char *argv[])
 
     argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
-    printf("%d %d %d %lf %lf\n", arguments.threads, arguments.zoom, arguments.zoom_factor, arguments.final_x, arguments.final_y);
-
-    return 0;
-
-    int NUM_ZOOMS = strtod(argv[1], NULL);
-    int NUM_THREADS = strtod(argv[2], NULL);
-
     int my_rank, comm_sz;
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    if (comm_sz <= NUM_ZOOMS)
+    if (comm_sz <= arguments.zoom)
     {
         // In questo caso i processi sono indipendenti: ognuno lavora su uno o più zoom
-        for (int i = 0; i < NUM_ZOOMS / comm_sz; i++)
+        for (int i = 0; i < arguments.zoom / comm_sz; i++)
         {
-            int actual_zoom = my_rank * NUM_ZOOMS / comm_sz + i;
+            int actual_zoom = my_rank * arguments.zoom / comm_sz + i;
             printf("Process %d working on zoom %d\n", my_rank, actual_zoom);
         }
     }
@@ -89,7 +85,7 @@ int main(int argc, char *argv[])
         // In questo caso più processi lavorano su uno stesso zoom, quindi ognuno avrà un master di riferimento
         // Forse è il caso  di creare nuovi communicators in modo da poter utilizzare collective communications?
         // https://mpitutorial.com/tutorials/introduction-to-groups-and-communicators/
-        int proc_per_zoom = comm_sz / NUM_ZOOMS;
+        int proc_per_zoom = comm_sz / arguments.zoom;
         int actual_zoom = my_rank / proc_per_zoom;
         int my_master = my_rank - my_rank % proc_per_zoom;
         printf("Process %d working on zoom %d with master %d\n", my_rank, actual_zoom, my_master);
@@ -134,9 +130,6 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Z=Zx+Zy*i  ;   Z0 = 0
-        double Zx, Zy;
-        double Zx2, Zy2; // Zx2=Zx*Zx;  Zy2=Zy*Zy
         //
         int Iteration;
         const int IterationMax = 500;
@@ -153,49 +146,9 @@ int main(int argc, char *argv[])
             for (iX = 0; iX < iXmax; iX++)
             {
                 Cx = CxMin + iX * PixelWidth;
-                // initial value of orbit = critical point Z= 0
-                Zx = 0.0;
-                Zy = 0.0;
-                Zx2 = Zx * Zx;
-                Zy2 = Zy * Zy;
-                //
-                for (Iteration = 0; Iteration < IterationMax && ((Zx2 + Zy2) < ER2); Iteration++)
-                {
-                    Zy = 2 * Zx * Zy + Cy;
-                    Zx = Zx2 - Zy2 + Cx;
-                    Zx2 = Zx * Zx;
-                    Zy2 = Zy * Zy;
-                };
+                Iteration = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
 
-                if (Iteration == IterationMax)
-                {
-                    // Point within the set. Mark it as black
-                    color[0] = 0;
-                    color[1] = 0;
-                    color[2] = 0;
-                }
-                else
-                {
-                    double c = 3 * log((double)Iteration) / log((double)(IterationMax)-1.0);
-                    if (c < 1)
-                    {
-                        color[0] = 0;
-                        color[1] = 0;
-                        color[2] = 255 * c;
-                    }
-                    else if (c < 2)
-                    {
-                        color[0] = 0;
-                        color[1] = 255 * (c - 1);
-                        color[2] = 255;
-                    }
-                    else
-                    {
-                        color[0] = 255 * (c - 2);
-                        color[1] = 255;
-                        color[2] = 255;
-                    }
-                }
+                colorFromIterations(Iteration, IterationMax, color);
 
                 for (int i = 0; i < 3; i++)
                 {
@@ -242,4 +195,57 @@ int main(int argc, char *argv[])
 
     MPI_Finalize();
     return 0;
+}
+
+int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2) 
+{
+    // initial value of orbit = critical point Z= 0
+    double Zx = 0.0;
+    double Zy = 0.0;
+    double Zx2 = Zx * Zx;
+    double Zy2 = Zy * Zy;
+    //
+    int Iteration;
+    for (Iteration = 0; Iteration < IterationMax && ((Zx2 + Zy2) < ER2); Iteration++)
+    {
+        Zy = 2 * Zx * Zy + Cy;
+        Zx = Zx2 - Zy2 + Cx;
+        Zx2 = Zx * Zx;
+        Zy2 = Zy * Zy;
+    };
+    return Iteration;
+}
+
+void colorFromIterations(int Iteration, int IterationMax, unsigned int* color) 
+{
+    if (Iteration == IterationMax)
+    {
+        // Point within the set. Mark it as black
+        color[0] = 0;
+        color[1] = 0;
+        color[2] = 0;
+    }
+    else
+    {
+        double c = 3 * log((double)Iteration) / log((double)(IterationMax)-1.0);
+        if (c < 1)
+        {
+            color[0] = 0;
+            color[1] = 0;
+            color[2] = 255 * c;
+        }
+        else if (c < 2)
+        {
+            color[0] = 0;
+            color[1] = 255 * (c - 1);
+            color[2] = 255;
+        }
+        else
+        {
+            color[0] = 255 * (c - 2);
+            color[1] = 255;
+            color[2] = 255;
+        }
+    }
+    return;
 }
