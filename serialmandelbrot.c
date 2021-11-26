@@ -16,14 +16,14 @@ int main()
 {
     /* screen ( integer) coordinate */
     int iX, iY;
-    const int iXmax = 4000;
-    const int iYmax = 4000;
+    const int iXmax = 800;
+    const int iYmax = 800;
     /* world ( double) coordinate = parameter plane*/
     double Cx, Cy;
-    const double CxMin = -1.5;
-    const double CxMax = 1.0;
-    const double CyMin = -1.0;
-    const double CyMax = 1.0;
+    const double CxMin = -2.5;
+    const double CxMax = 1.5;
+    const double CyMin = -2.0;
+    const double CyMax = 2.0;
     /* */
     double PixelWidth = (CxMax - CxMin) / iXmax;
     double PixelHeight = (CyMax - CyMin) / iYmax;

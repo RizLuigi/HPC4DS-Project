@@ -53,6 +53,7 @@ static struct argp argp = {options, parse_opt};
 int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2);
 void colorFromIterations(int Iteration, int IterationMax, unsigned int* color);
 
+
 int main(int argc, char *argv[])
 {
     struct arguments arguments;
@@ -70,6 +71,23 @@ int main(int argc, char *argv[])
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    // parametri per lo zoom
+    double final_x = arguments.final_x;
+    double final_y = arguments.final_y;
+    double zoom_inc = arguments.zoom_factor;
+
+    // default values
+    /* screen ( integer) coordinate */
+    int iX, iY;
+    const int iXmax = 800;
+    const int iYmax = 800;
+    /* world ( double) coordinate = parameter plane*/
+    double Cx, Cy;
+    const double CxMin = -2.5;
+    const double CxMax = 1.5;
+    const double CyMin = -2.0;
+    const double CyMax = 2.0;
 
     if (comm_sz <= arguments.zoom)
     {
@@ -99,21 +117,26 @@ int main(int argc, char *argv[])
         MPI_Comm_size(frame_comm, &frame_size);
         int frame_maser = frame_rank - frame_rank % proc_per_zoom;
 
-        printf("frame_size: %d - frame_rank: %d frame_maser: %d\n", frame_size, frame_rank, frame_maser);
+        printf("%d/%d - frame_size: %d - frame_rank: %d frame_maser: %d\n", my_rank, actual_zoom, frame_size, frame_rank, frame_maser);
 
-        /* screen ( integer) coordinate */
-        int iX, iY;
-        const int iXmax = 800;
-        const int iYmax = 800;
-        /* world ( double) coordinate = parameter plane*/
-        double Cx, Cy;
-        const double CxMin = -2.5;
-        const double CxMax = 1.5;
-        const double CyMin = -2.0;
-        const double CyMax = 2.0;
+        // new coordinates for current frame
+        double CxMax_cur = CxMax;
+        double CxMin_cur = CxMin;
+        double CyMax_cur = CyMax;
+        double CyMin_cur = CyMin;
+
+        if (actual_zoom != 0)
+        {
+            int cur_zoom = zoom_inc * actual_zoom;
+            CxMax_cur = CxMax_cur / cur_zoom + final_x;
+            CyMax_cur = CyMax_cur / cur_zoom + final_y;
+            CxMin_cur = CxMin_cur / cur_zoom + final_x;
+            CyMin_cur = CyMin_cur / cur_zoom + final_y;
+        }
+
         /* */
-        double PixelWidth = (CxMax - CxMin) / iXmax;
-        double PixelHeight = (CyMax - CyMin) / iYmax;
+        double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
+        double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
         /* color component ( R or G or B) is coded from 0 to 255 */
         /* it is 24 bit color RGB file */
         const int MaxColorComponentValue = 255;
@@ -132,20 +155,20 @@ int main(int argc, char *argv[])
 
         //
         int Iteration;
-        const int IterationMax = 500;
+        const int IterationMax = 2000;
         // bail-out value , radius of circle ;
-        const double EscapeRadius = 100;
+        const double EscapeRadius = 300;
         double ER2 = EscapeRadius * EscapeRadius;
 
         //compute and write image data bytes to the file
         for (iY = frame_rank; iY < iYmax; iY += frame_size)
         {
-            Cy = CyMin + iY * PixelHeight;
+            Cy = CyMin_cur + iY * PixelHeight;
             if (fabs(Cy) < PixelHeight / 2)
                 Cy = 0.0; // Main antenna
             for (iX = 0; iX < iXmax; iX++)
             {
-                Cx = CxMin + iX * PixelWidth;
+                Cx = CxMin_cur + iX * PixelWidth;
                 Iteration = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
 
                 colorFromIterations(Iteration, IterationMax, color);
