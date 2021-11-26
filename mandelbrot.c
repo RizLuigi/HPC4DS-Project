@@ -50,6 +50,10 @@ static int parse_opt (int key, char* arg, struct argp_state *state)
 
 static struct argp argp = {options, parse_opt};
 
+int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2);
+void colorFromIterations(int Iteration, int IterationMax, unsigned int* color);
+
+
 int main(int argc, char *argv[])
 {
     struct arguments arguments;
@@ -149,9 +153,6 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Z=Zx+Zy*i  ;   Z0 = 0
-        double Zx, Zy;
-        double Zx2, Zy2; // Zx2=Zx*Zx;  Zy2=Zy*Zy
         //
         int Iteration;
         const int IterationMax = 2000;
@@ -168,49 +169,9 @@ int main(int argc, char *argv[])
             for (iX = 0; iX < iXmax; iX++)
             {
                 Cx = CxMin_cur + iX * PixelWidth;
-                // initial value of orbit = critical point Z= 0
-                Zx = 0.0;
-                Zy = 0.0;
-                Zx2 = Zx * Zx;
-                Zy2 = Zy * Zy;
-                //
-                for (Iteration = 0; Iteration < IterationMax && ((Zx2 + Zy2) < ER2); Iteration++)
-                {
-                    Zy = 2 * Zx * Zy + Cy;
-                    Zx = Zx2 - Zy2 + Cx;
-                    Zx2 = Zx * Zx;
-                    Zy2 = Zy * Zy;
-                };
+                Iteration = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
 
-                if (Iteration == IterationMax)
-                {
-                    // Point within the set. Mark it as black
-                    color[0] = 0;
-                    color[1] = 0;
-                    color[2] = 0;
-                }
-                else
-                {
-                    double c = 3 * log((double)Iteration) / log((double)(IterationMax)-1.0);
-                    if (c < 1)
-                    {
-                        color[0] = 0;
-                        color[1] = 0;
-                        color[2] = 255 * c;
-                    }
-                    else if (c < 2)
-                    {
-                        color[0] = 0;
-                        color[1] = 255 * (c - 1);
-                        color[2] = 255;
-                    }
-                    else
-                    {
-                        color[0] = 255 * (c - 2);
-                        color[1] = 255;
-                        color[2] = 255;
-                    }
-                }
+                colorFromIterations(Iteration, IterationMax, color);
 
                 for (int i = 0; i < 3; i++)
                 {
@@ -257,4 +218,57 @@ int main(int argc, char *argv[])
 
     MPI_Finalize();
     return 0;
+}
+
+int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2) 
+{
+    // initial value of orbit = critical point Z= 0
+    double Zx = 0.0;
+    double Zy = 0.0;
+    double Zx2 = Zx * Zx;
+    double Zy2 = Zy * Zy;
+    //
+    int Iteration;
+    for (Iteration = 0; Iteration < IterationMax && ((Zx2 + Zy2) < ER2); Iteration++)
+    {
+        Zy = 2 * Zx * Zy + Cy;
+        Zx = Zx2 - Zy2 + Cx;
+        Zx2 = Zx * Zx;
+        Zy2 = Zy * Zy;
+    };
+    return Iteration;
+}
+
+void colorFromIterations(int Iteration, int IterationMax, unsigned int* color) 
+{
+    if (Iteration == IterationMax)
+    {
+        // Point within the set. Mark it as black
+        color[0] = 0;
+        color[1] = 0;
+        color[2] = 0;
+    }
+    else
+    {
+        double c = 3 * log((double)Iteration) / log((double)(IterationMax)-1.0);
+        if (c < 1)
+        {
+            color[0] = 0;
+            color[1] = 0;
+            color[2] = 255 * c;
+        }
+        else if (c < 2)
+        {
+            color[0] = 0;
+            color[1] = 255 * (c - 1);
+            color[2] = 255;
+        }
+        else
+        {
+            color[0] = 255 * (c - 2);
+            color[1] = 255;
+            color[2] = 255;
+        }
+    }
+    return;
 }
