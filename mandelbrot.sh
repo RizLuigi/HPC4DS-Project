@@ -9,5 +9,5 @@
 module load mpich-3.2
 cd ./HPC4DS-Project
 
-mpirun.actual -n 16 ./mandelbrot -z 8 -t 100 #number of zooms, number of threads
+mpirun.actual -n 32 ./mandelbrot -z 4 -t 100 #number of zooms, number of threads
 

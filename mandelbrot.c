@@ -4,6 +4,8 @@
 //#include <omp.h>
 #include <math.h>
 #include <argp.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 struct argp_option options[] =
 {
@@ -79,7 +81,6 @@ int main(int argc, char *argv[])
 
     // default values
     /* screen ( integer) coordinate */
-    int iX, iY;
     const int iXmax = 800;
     const int iYmax = 800;
     /* world ( double) coordinate = parameter plane*/
@@ -100,13 +101,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        // In questo caso più processi lavorano su uno stesso zoom, quindi ognuno avrà un master di riferimento
-        // Forse è il caso  di creare nuovi communicators in modo da poter utilizzare collective communications?
-        // https://mpitutorial.com/tutorials/introduction-to-groups-and-communicators/
         int proc_per_zoom = comm_sz / arguments.zoom;
-        int actual_zoom = my_rank / proc_per_zoom;
-        int my_master = my_rank - my_rank % proc_per_zoom;
-        printf("Process %d working on zoom %d with master %d\n", my_rank, actual_zoom, my_master);
 
         // creazione communicators gropus
         int working_frame = my_rank / proc_per_zoom;
@@ -115,9 +110,9 @@ int main(int argc, char *argv[])
         int frame_rank, frame_size;
         MPI_Comm_rank(frame_comm, &frame_rank);
         MPI_Comm_size(frame_comm, &frame_size);
-        int frame_maser = frame_rank - frame_rank % proc_per_zoom;
+        int frame_master = frame_rank - frame_rank % proc_per_zoom;
 
-        printf("%d/%d - frame_size: %d - frame_rank: %d frame_maser: %d\n", my_rank, actual_zoom, frame_size, frame_rank, frame_maser);
+        printf("%d/%d - frame_size: %d - frame_rank: %d frame_master: %d\n", my_rank, working_frame, frame_size, frame_rank, frame_master);
 
         // new coordinates for current frame
         double CxMax_cur = CxMax;
@@ -125,9 +120,9 @@ int main(int argc, char *argv[])
         double CyMax_cur = CyMax;
         double CyMin_cur = CyMin;
 
-        if (actual_zoom != 0)
+        if (working_frame != 0)
         {
-            int cur_zoom = zoom_inc * actual_zoom;
+            int cur_zoom = zoom_inc * working_frame;
             CxMax_cur = CxMax_cur / cur_zoom + final_x;
             CyMax_cur = CyMax_cur / cur_zoom + final_y;
             CxMin_cur = CxMin_cur / cur_zoom + final_x;
@@ -140,73 +135,55 @@ int main(int argc, char *argv[])
         /* color component ( R or G or B) is coded from 0 to 255 */
         /* it is 24 bit color RGB file */
         const int MaxColorComponentValue = 255;
-        unsigned int color[3];
-        unsigned int ppmMatrix[iXmax][iYmax][3];
-        for (iY = 0; iY < iYmax; iY++)
-        {
-            for (iX = 0; iX < iYmax; iX++)
-            {
-                for (int i = 0; i < 3; i++)
-                {
-                    ppmMatrix[iY][iX][i] = 0;
-                }
-            }
-        }
 
-        //
-        int Iteration;
+        unsigned int rows_per_proc = iYmax/frame_size;
+        unsigned int iterations[iXmax*rows_per_proc];
+
+        // 
         const int IterationMax = 2000;
         // bail-out value , radius of circle ;
         const double EscapeRadius = 300;
         double ER2 = EscapeRadius * EscapeRadius;
 
-        //compute and write image data bytes to the file
-        for (iY = frame_rank; iY < iYmax; iY += frame_size)
-        {
-            Cy = CyMin_cur + iY * PixelHeight;
+        for (int i=0; i<iXmax*rows_per_proc; i++) {
+            Cy = CyMin_cur + (i/iXmax + frame_rank*rows_per_proc) * PixelHeight;
             if (fabs(Cy) < PixelHeight / 2)
                 Cy = 0.0; // Main antenna
-            for (iX = 0; iX < iXmax; iX++)
-            {
-                Cx = CxMin_cur + iX * PixelWidth;
-                Iteration = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
-
-                colorFromIterations(Iteration, IterationMax, color);
-
-                for (int i = 0; i < 3; i++)
-                {
-                    ppmMatrix[iY][iX][i] = color[i];
-                }
-            }
+            Cx = CxMin_cur + (i%iXmax) * PixelWidth;
+            iterations[i] = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
         }
 
-        //MPI_REDUCE
-        unsigned int GLOBALppmMatrix[iXmax][iYmax][3];
-        MPI_Reduce(ppmMatrix, GLOBALppmMatrix, iYmax * iXmax * 3, MPI_INT, MPI_SUM, frame_maser, frame_comm);
+        unsigned int* iterations_gathered;
+        //MPI_GATHER
+        if (frame_rank == frame_master) {
+            iterations_gathered = (unsigned int *) malloc(iXmax*iYmax*sizeof(unsigned int));
+            MPI_Gather(iterations, iXmax*rows_per_proc, MPI_INT, iterations_gathered, iXmax*rows_per_proc, MPI_INT, frame_master, frame_comm);
+        }else{
+            MPI_Gather(iterations, iXmax*rows_per_proc, MPI_INT, NULL, iXmax*rows_per_proc, MPI_INT, frame_master, frame_comm);
+        }
 
         //WRITE TO FILE
-        if (my_rank == my_master)
+        if (frame_rank == frame_master)
         {
             FILE *fp;
+            mkdir("./frames", 0777);
             char filename[30];
-            sprintf(filename, "zoom%d.ppm", actual_zoom);
+            sprintf(filename, "frames/zoom%d.ppm", working_frame);
             char *comment = "# "; //comment should start with #
             //create new file,give it a name and open it in binary mode
             fp = fopen(filename, "wb"); // b -  binary mode
             //write ASCII header to the file
             fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
+            unsigned int color[3];
             unsigned char CHARcolor[3];
-            for (iY = 0; iY < iYmax; iY++)
-            {
-                for (iX = 0; iX < iYmax; iX++)
+            for (int i=0; i<iXmax*iYmax; i++) {
+                colorFromIterations(iterations_gathered[i], IterationMax, color);
+                //write color to the file
+                for (int i = 0; i < 3; i++)
                 {
-                    //write color to the file
-                    for (int i = 0; i < 3; i++)
-                    {
-                        CHARcolor[i] = GLOBALppmMatrix[iY][iX][i];
-                    }
-                    fwrite(CHARcolor, 1, 3, fp);
+                    CHARcolor[i] = color[i];
                 }
+                fwrite(CHARcolor, 1, 3, fp);
             }
 
             fclose(fp);
