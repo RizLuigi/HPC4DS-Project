@@ -90,13 +90,79 @@ int main(int argc, char *argv[])
     const double CyMin = -2.0;
     const double CyMax = 2.0;
 
+    /* color component ( R or G or B) is coded from 0 to 255 */
+    /* it is 24 bit color RGB file */
+    const int MaxColorComponentValue = 255;
+
+    // 
+    const int IterationMax = 2000;
+    // bail-out value , radius of circle ;
+    const double EscapeRadius = 300;
+    double ER2 = EscapeRadius * EscapeRadius;
+
     if (comm_sz <= arguments.zoom)
     {
+        unsigned int iterations[iXmax][iYmax];
         // In questo caso i processi sono indipendenti: ognuno lavora su uno o più zoom
         for (int i = 0; i < arguments.zoom / comm_sz; i++)
         {
             int actual_zoom = my_rank * arguments.zoom / comm_sz + i;
             printf("Process %d working on zoom %d\n", my_rank, actual_zoom);
+
+            // new coordinates for current frame
+            double CxMax_cur = CxMax;
+            double CxMin_cur = CxMin;
+            double CyMax_cur = CyMax;
+            double CyMin_cur = CyMin;
+
+            if (actual_zoom != 0)
+            {
+                int cur_zoom = zoom_inc * actual_zoom;
+                CxMax_cur = CxMax_cur / cur_zoom + final_x;
+                CyMax_cur = CyMax_cur / cur_zoom + final_y;
+                CxMin_cur = CxMin_cur / cur_zoom + final_x;
+                CyMin_cur = CyMin_cur / cur_zoom + final_y;
+            }
+
+            double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
+            double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
+
+            for (int iY = 0; iY < iYmax; iY++)
+            {
+                Cy = CyMin_cur + iY * PixelHeight;
+                if (fabs(Cy) < PixelHeight / 2)
+                    Cy = 0.0; // Main antenna
+                for (int iX = 0; iX < iXmax; iX++)
+                {
+                    Cx = CxMin_cur + iX * PixelWidth;
+                    iterations[iX][iY] = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
+                }
+            }
+
+            FILE *fp;
+            mkdir("./frames", 0777);
+            char filename[30];
+            sprintf(filename, "frames/zoom%d.ppm", actual_zoom);
+            char *comment = "# "; //comment should start with #
+            //create new file,give it a name and open it in binary mode
+            fp = fopen(filename, "wb"); // b -  binary mode
+            //write ASCII header to the file
+            fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
+            unsigned int color[3];
+            unsigned char CHARcolor[3];
+            for (int iY = 0; iY < iYmax; iY++) 
+            {   
+                for (int iX = 0; iX < iXmax; iX++)
+                {
+                    colorFromIterations(iterations[iX][iY], IterationMax, color);
+                    //write color to the file
+                    for (int i = 0; i < 3; i++)
+                    {
+                        CHARcolor[i] = color[i];
+                    }
+                    fwrite(CHARcolor, 1, 3, fp);
+                }
+            }
         }
     }
     else
@@ -132,18 +198,9 @@ int main(int argc, char *argv[])
         /* */
         double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
         double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
-        /* color component ( R or G or B) is coded from 0 to 255 */
-        /* it is 24 bit color RGB file */
-        const int MaxColorComponentValue = 255;
 
         unsigned int rows_per_proc = iYmax/frame_size;
         unsigned int iterations[iXmax*rows_per_proc];
-
-        // 
-        const int IterationMax = 2000;
-        // bail-out value , radius of circle ;
-        const double EscapeRadius = 300;
-        double ER2 = EscapeRadius * EscapeRadius;
 
         for (int i=0; i<iXmax*rows_per_proc; i++) {
             Cy = CyMin_cur + (i/iXmax + frame_rank*rows_per_proc) * PixelHeight;
