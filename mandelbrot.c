@@ -8,23 +8,22 @@
 #include <sys/types.h>
 
 struct argp_option options[] =
-{
-    {"threads", 't', "threadCount", 0, "Use threadCount threads per process"},
-    {"zooms", 'z', "zoomCount", 0 , "Create zoomCount images"},
-    {"zoom-factor", 'f', "zoomFactor", 0, "Use zoomFactor as magnification factor"},
-    {"final-x", 'x', "X", 0, "Use X as final x-coordinate"},
-    {"final-y", 'y', "Y", 0, "Use Y as final y-coordinate"},
-    {0 }
-};
+    {
+        {"threads", 't', "threadCount", 0, "Use threadCount threads per process"},
+        {"zooms", 'z', "zoomCount", 0, "Create zoomCount images"},
+        {"zoom-factor", 'f', "zoomFactor", 0, "Use zoomFactor as magnification factor"},
+        {"final-x", 'x', "X", 0, "Use X as final x-coordinate"},
+        {"final-y", 'y', "Y", 0, "Use Y as final y-coordinate"},
+        {0}};
 
 struct arguments
 {
-  int threads, zoom, zoom_factor;
-  double final_x, final_y;
+    int threads, zoom, zoom_factor;
+    double final_x, final_y;
 };
 
-static int parse_opt (int key, char* arg, struct argp_state *state)
-{   
+static int parse_opt(int key, char *arg, struct argp_state *state)
+{
     struct arguments *arguments = state->input;
 
     switch (key)
@@ -45,7 +44,7 @@ static int parse_opt (int key, char* arg, struct argp_state *state)
         arguments->final_y = atoi(arg);
         break;
     default:
-      return ARGP_ERR_UNKNOWN;
+        return ARGP_ERR_UNKNOWN;
     }
     return 0;
 }
@@ -53,8 +52,7 @@ static int parse_opt (int key, char* arg, struct argp_state *state)
 static struct argp argp = {options, parse_opt};
 
 int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2);
-void colorFromIterations(int Iteration, int IterationMax, unsigned int* color);
-
+void colorFromIterations(int Iteration, int IterationMax, unsigned int *color);
 
 int main(int argc, char *argv[])
 {
@@ -63,11 +61,11 @@ int main(int argc, char *argv[])
     // DEFAULTS
     arguments.threads = 10;
     arguments.zoom = 4;
-    arguments.zoom_factor = 5;
-    arguments.final_x = -0.7;
-    arguments.final_y = 0.26;
+    arguments.zoom_factor = 2;
+    arguments.final_x = -0.6;
+    arguments.final_y = 0.4;
 
-    argp_parse (&argp, argc, argv, 0, 0, &arguments);
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
     int my_rank, comm_sz;
     MPI_Init(NULL, NULL);
@@ -94,7 +92,7 @@ int main(int argc, char *argv[])
     /* it is 24 bit color RGB file */
     const int MaxColorComponentValue = 255;
 
-    // 
+    //
     const int IterationMax = 2000;
     // bail-out value , radius of circle ;
     const double EscapeRadius = 300;
@@ -150,8 +148,8 @@ int main(int argc, char *argv[])
             fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
             unsigned int color[3];
             unsigned char CHARcolor[3];
-            for (int iY = 0; iY < iYmax; iY++) 
-            {   
+            for (int iY = 0; iY < iYmax; iY++)
+            {
                 for (int iX = 0; iX < iXmax; iX++)
                 {
                     colorFromIterations(iterations[iX][iY], IterationMax, color);
@@ -178,45 +176,57 @@ int main(int argc, char *argv[])
         MPI_Comm_size(frame_comm, &frame_size);
         int frame_master = frame_rank - frame_rank % proc_per_zoom;
 
-        printf("%d/%d - frame_size: %d - frame_rank: %d frame_master: %d\n", my_rank, working_frame, frame_size, frame_rank, frame_master);
+        //printf("%d/%d - frame_size: %d - frame_rank: %d frame_master: %d\n", my_rank, working_frame, frame_size, frame_rank, frame_master);
 
         // new coordinates for current frame
-        double CxMax_cur = CxMax;
-        double CxMin_cur = CxMin;
-        double CyMax_cur = CyMax;
-        double CyMin_cur = CyMin;
+        double alpha = 1.0/pow(2.0, working_frame);
+        double mean_x = alpha * ((CxMax + CxMin) / 2.0) + (1 - alpha) * final_x;
+        double mean_y = alpha * ((CyMax + CyMin) / 2.0) + (1 - alpha) * final_y;
+        double delta_x = ((CxMax - CxMin)/2.0) / pow(zoom_inc, working_frame);
+        double delta_y = ((CyMax - CyMin)/2.0) / pow(zoom_inc, working_frame);
 
-        if (working_frame != 0)
+        double CxMax_cur = mean_x + delta_x;
+        double CxMin_cur = mean_x - delta_x;
+        double CyMax_cur = mean_y + delta_y;
+        double CyMin_cur = mean_y - delta_y;
+
+        printf("(%lf, %lf), (%lf, %lf)\n", mean_x, mean_y, delta_x, delta_y);
+
+        /*if (working_frame != 0)
         {
             int cur_zoom = zoom_inc * working_frame;
             CxMax_cur = CxMax_cur / cur_zoom + final_x;
             CyMax_cur = CyMax_cur / cur_zoom + final_y;
             CxMin_cur = CxMin_cur / cur_zoom + final_x;
             CyMin_cur = CyMin_cur / cur_zoom + final_y;
-        }
+        }*/
 
         /* */
         double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
         double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
 
-        unsigned int rows_per_proc = iYmax/frame_size;
-        unsigned int iterations[iXmax*rows_per_proc];
+        unsigned int rows_per_proc = iYmax / frame_size;
+        unsigned int iterations[iXmax * rows_per_proc];
 
-        for (int i=0; i<iXmax*rows_per_proc; i++) {
-            Cy = CyMin_cur + (i/iXmax + frame_rank*rows_per_proc) * PixelHeight;
+        for (int i = 0; i < iXmax * rows_per_proc; i++)
+        {
+            Cy = CyMin_cur + (i / iXmax + frame_rank * rows_per_proc) * PixelHeight;
             if (fabs(Cy) < PixelHeight / 2)
                 Cy = 0.0; // Main antenna
-            Cx = CxMin_cur + (i%iXmax) * PixelWidth;
+            Cx = CxMin_cur + (i % iXmax) * PixelWidth;
             iterations[i] = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
         }
 
-        unsigned int* iterations_gathered;
+        unsigned int *iterations_gathered;
         //MPI_GATHER
-        if (frame_rank == frame_master) {
-            iterations_gathered = (unsigned int *) malloc(iXmax*iYmax*sizeof(unsigned int));
-            MPI_Gather(iterations, iXmax*rows_per_proc, MPI_INT, iterations_gathered, iXmax*rows_per_proc, MPI_INT, frame_master, frame_comm);
-        }else{
-            MPI_Gather(iterations, iXmax*rows_per_proc, MPI_INT, NULL, iXmax*rows_per_proc, MPI_INT, frame_master, frame_comm);
+        if (frame_rank == frame_master)
+        {
+            iterations_gathered = (unsigned int *)malloc(iXmax * iYmax * sizeof(unsigned int));
+            MPI_Gather(iterations, iXmax * rows_per_proc, MPI_INT, iterations_gathered, iXmax * rows_per_proc, MPI_INT, frame_master, frame_comm);
+        }
+        else
+        {
+            MPI_Gather(iterations, iXmax * rows_per_proc, MPI_INT, NULL, iXmax * rows_per_proc, MPI_INT, frame_master, frame_comm);
         }
 
         //WRITE TO FILE
@@ -233,7 +243,8 @@ int main(int argc, char *argv[])
             fprintf(fp, "P6\n %s\n %d\n %d\n %d\n", comment, iXmax, iYmax, MaxColorComponentValue);
             unsigned int color[3];
             unsigned char CHARcolor[3];
-            for (int i=0; i<iXmax*iYmax; i++) {
+            for (int i = 0; i < iXmax * iYmax; i++)
+            {
                 colorFromIterations(iterations_gathered[i], IterationMax, color);
                 //write color to the file
                 for (int i = 0; i < 3; i++)
@@ -254,7 +265,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2) 
+int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2)
 {
     // initial value of orbit = critical point Z= 0
     double Zx = 0.0;
@@ -273,7 +284,7 @@ int mandelbrotIterations(double Cx, double Cy, int IterationMax, double ER2)
     return Iteration;
 }
 
-void colorFromIterations(int Iteration, int IterationMax, unsigned int* color) 
+void colorFromIterations(int Iteration, int IterationMax, unsigned int *color)
 {
     if (Iteration == IterationMax)
     {
