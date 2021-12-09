@@ -62,8 +62,8 @@ int main(int argc, char *argv[])
     arguments.threads = 10;
     arguments.zoom = 4;
     arguments.zoom_factor = 2;
-    arguments.final_x = -0.6;
-    arguments.final_y = 0.4;
+    arguments.final_x = -1.1428;
+    arguments.final_y = -0.3;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
@@ -79,8 +79,8 @@ int main(int argc, char *argv[])
 
     // default values
     /* screen ( integer) coordinate */
-    const int iXmax = 800;
-    const int iYmax = 800;
+    const int iXmax = 4000;
+    const int iYmax = 4000;
     /* world ( double) coordinate = parameter plane*/
     double Cx, Cy;
     const double CxMin = -2.5;
