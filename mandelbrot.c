@@ -79,8 +79,8 @@ int main(int argc, char *argv[])
 
     // default values
     /* screen ( integer) coordinate */
-    const int iXmax = 4000;
-    const int iYmax = 4000;
+    const int iXmax = 400;
+    const int iYmax = 400;
     /* world ( double) coordinate = parameter plane*/
     double Cx, Cy;
     const double CxMin = -2.5;
@@ -108,19 +108,18 @@ int main(int argc, char *argv[])
             printf("Process %d working on zoom %d\n", my_rank, actual_zoom);
 
             // new coordinates for current frame
-            double CxMax_cur = CxMax;
-            double CxMin_cur = CxMin;
-            double CyMax_cur = CyMax;
-            double CyMin_cur = CyMin;
+            double alpha = 1.0/pow(2.0, actual_zoom);
+            double mean_x = alpha * ((CxMax + CxMin) / 2.0) + (1 - alpha) * final_x;
+            double mean_y = alpha * ((CyMax + CyMin) / 2.0) + (1 - alpha) * final_y;
+            double delta_x = ((CxMax - CxMin)/2.0) / pow(zoom_inc, actual_zoom);
+            double delta_y = ((CyMax - CyMin)/2.0) / pow(zoom_inc, actual_zoom);
 
-            if (actual_zoom != 0)
-            {
-                int cur_zoom = zoom_inc * actual_zoom;
-                CxMax_cur = CxMax_cur / cur_zoom + final_x;
-                CyMax_cur = CyMax_cur / cur_zoom + final_y;
-                CxMin_cur = CxMin_cur / cur_zoom + final_x;
-                CyMin_cur = CyMin_cur / cur_zoom + final_y;
-            }
+            double CxMax_cur = mean_x + delta_x;
+            double CxMin_cur = mean_x - delta_x;
+            double CyMax_cur = mean_y + delta_y;
+            double CyMin_cur = mean_y - delta_y;
+
+            printf("%d (%lf, %lf), (%lf, %lf)\n", actual_zoom, mean_x, mean_y, delta_x, delta_y);
 
             double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
             double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
@@ -176,8 +175,6 @@ int main(int argc, char *argv[])
         MPI_Comm_size(frame_comm, &frame_size);
         int frame_master = frame_rank - frame_rank % proc_per_zoom;
 
-        //printf("%d/%d - frame_size: %d - frame_rank: %d frame_master: %d\n", my_rank, working_frame, frame_size, frame_rank, frame_master);
-
         // new coordinates for current frame
         double alpha = 1.0/pow(2.0, working_frame);
         double mean_x = alpha * ((CxMax + CxMin) / 2.0) + (1 - alpha) * final_x;
@@ -191,15 +188,6 @@ int main(int argc, char *argv[])
         double CyMin_cur = mean_y - delta_y;
 
         printf("(%lf, %lf), (%lf, %lf)\n", mean_x, mean_y, delta_x, delta_y);
-
-        /*if (working_frame != 0)
-        {
-            int cur_zoom = zoom_inc * working_frame;
-            CxMax_cur = CxMax_cur / cur_zoom + final_x;
-            CyMax_cur = CyMax_cur / cur_zoom + final_y;
-            CxMin_cur = CxMin_cur / cur_zoom + final_x;
-            CyMin_cur = CyMin_cur / cur_zoom + final_y;
-        }*/
 
         /* */
         double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
