@@ -14,11 +14,13 @@ struct argp_option options[] =
         {"zoom-factor", 'f', "zoomFactor", 0, "Use zoomFactor as magnification factor"},
         {"final-x", 'x', "X", 0, "Use X as final x-coordinate"},
         {"final-y", 'y', "Y", 0, "Use Y as final y-coordinate"},
+        {"resolution", 'r', "R", 0, "Create a R x R image"},
+        {"iterations", 'i', "ITER", 0, "Use ITER iterations when evaluating the membership of a point to the Mandelbrot set"},
         {0}};
 
 struct arguments
 {
-    int threads, zoom, zoom_factor;
+    int threads, zoom, zoom_factor, resolution, iterations;
     double final_x, final_y;
 };
 
@@ -43,6 +45,12 @@ static int parse_opt(int key, char *arg, struct argp_state *state)
     case 'y':
         arguments->final_y = atoi(arg);
         break;
+    case 'r':
+        arguments->resolution = atoi(arg);
+        break;
+    case 'i':
+        arguments->iterations = atoi(arg);
+        break;
     default:
         return ARGP_ERR_UNKNOWN;
     }
@@ -64,6 +72,8 @@ int main(int argc, char *argv[])
     arguments.zoom_factor = 2;
     arguments.final_x = -1.1428;
     arguments.final_y = -0.3;
+    arguments.resolution = 400;
+    arguments.resolution = 2000;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
@@ -79,8 +89,8 @@ int main(int argc, char *argv[])
 
     // default values
     /* screen ( integer) coordinate */
-    const int iXmax = 400;
-    const int iYmax = 400;
+    const int iXmax = arguments.resolution;
+    const int iYmax = arguments.resolution;
     /* world ( double) coordinate = parameter plane*/
     double Cx, Cy;
     const double CxMin = -2.5;
@@ -93,7 +103,7 @@ int main(int argc, char *argv[])
     const int MaxColorComponentValue = 255;
 
     //
-    const int IterationMax = 2000;
+    const int IterationMax = arguments.iterations;
     // bail-out value , radius of circle ;
     const double EscapeRadius = 300;
     double ER2 = EscapeRadius * EscapeRadius;
