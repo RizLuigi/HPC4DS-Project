@@ -143,7 +143,9 @@ int main(int argc, char *argv[])
 
             double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
             double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
+            #ifdef _OPENMP
             #pragma omp parallel for num_threads(arguments.threads) private(Cy, Cx)
+            #endif
             for (int iY = 0; iY < iYmax; iY++)
             {
                 Cy = CyMin_cur + iY * PixelHeight;
@@ -215,7 +217,9 @@ int main(int argc, char *argv[])
         unsigned int rows_per_proc = iYmax / frame_size;
         unsigned int iterations[iXmax * rows_per_proc];
 
+        #ifdef _OPENMP
         #pragma omp parallel for num_threads(arguments.threads) private(Cy, Cx)
+        #endif
         for (int i = 0; i < iXmax * rows_per_proc; i++)
         {
             Cy = CyMin_cur + (i / iXmax + frame_rank * rows_per_proc) * PixelHeight;
