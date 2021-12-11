@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-//#include <omp.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include <math.h>
 #include <argp.h>
 #include <sys/stat.h>
@@ -108,14 +110,22 @@ int main(int argc, char *argv[])
     const double EscapeRadius = 2.0;
     double ER2 = EscapeRadius * EscapeRadius;
 
+    double start, finish, elapsed;
+    start = omp_get_wtime();
+
+    mkdir("./frames", 0777);
+
     if (comm_sz <= arguments.zoom)
-    {
-        unsigned int iterations[iXmax][iYmax];
+    {   
+        //Same as: unsigned int iterations[iXmax][iYmax];
+        unsigned int (*iterations)[iYmax];
+        iterations = malloc(sizeof(int[iXmax][iYmax]));
+
         // In questo caso i processi sono indipendenti: ognuno lavora su uno o più zoom
         for (int i = 0; i < arguments.zoom / comm_sz; i++)
         {
             int actual_zoom = my_rank * arguments.zoom / comm_sz + i;
-            printf("Process %d working on zoom %d\n", my_rank, actual_zoom);
+            //printf("Process %d working on zoom %d\n", my_rank, actual_zoom);
 
             // new coordinates for current frame
             double alpha = 1.0/pow(2.0, actual_zoom);
@@ -129,11 +139,11 @@ int main(int argc, char *argv[])
             double CyMax_cur = mean_y + delta_y;
             double CyMin_cur = mean_y - delta_y;
 
-            printf("%d (%lf, %lf), (%lf, %lf)\n", actual_zoom, mean_x, mean_y, delta_x, delta_y);
+            //printf("%d (%lf, %lf), (%lf, %lf)\n", actual_zoom, mean_x, mean_y, delta_x, delta_y);
 
             double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
             double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
-
+            #pragma omp parallel for num_threads(arguments.threads) private(Cy, Cx)
             for (int iY = 0; iY < iYmax; iY++)
             {
                 Cy = CyMin_cur + iY * PixelHeight;
@@ -147,7 +157,6 @@ int main(int argc, char *argv[])
             }
 
             FILE *fp;
-            mkdir("./frames", 0777);
             char filename[30];
             sprintf(filename, "frames/zoom%d.ppm", actual_zoom);
             char *comment = "# "; //comment should start with #
@@ -197,7 +206,7 @@ int main(int argc, char *argv[])
         double CyMax_cur = mean_y + delta_y;
         double CyMin_cur = mean_y - delta_y;
 
-        printf("(%lf, %lf), (%lf, %lf)\n", mean_x, mean_y, delta_x, delta_y);
+        //printf("(%lf, %lf), (%lf, %lf)\n", mean_x, mean_y, delta_x, delta_y);
 
         /* */
         double PixelWidth = (CxMax_cur - CxMin_cur) / iXmax;
@@ -206,6 +215,7 @@ int main(int argc, char *argv[])
         unsigned int rows_per_proc = iYmax / frame_size;
         unsigned int iterations[iXmax * rows_per_proc];
 
+        #pragma omp parallel for num_threads(arguments.threads) private(Cy, Cx)
         for (int i = 0; i < iXmax * rows_per_proc; i++)
         {
             Cy = CyMin_cur + (i / iXmax + frame_rank * rows_per_proc) * PixelHeight;
@@ -231,7 +241,6 @@ int main(int argc, char *argv[])
         if (frame_rank == frame_master)
         {
             FILE *fp;
-            mkdir("./frames", 0777);
             char filename[30];
             sprintf(filename, "frames/zoom%d.ppm", working_frame);
             char *comment = "# "; //comment should start with #
@@ -257,6 +266,14 @@ int main(int argc, char *argv[])
 
         // finalize the frame_comm comunicator
         MPI_Comm_free(&frame_comm);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if (my_rank==0) {
+        finish = omp_get_wtime();
+        elapsed = finish - start;
+        printf("Elapsed time = %e seconds\n", elapsed);
     }
 
     MPI_Finalize();
