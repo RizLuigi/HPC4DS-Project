@@ -118,11 +118,11 @@ int main(int argc, char *argv[])
             printf("Process %d working on zoom %d\n", my_rank, actual_zoom);
 
             // new coordinates for current frame
-            double alpha = 1.0/pow(2.0, actual_zoom);
+            double alpha = 1.0 / pow(2.0, actual_zoom);
             double mean_x = alpha * ((CxMax + CxMin) / 2.0) + (1 - alpha) * final_x;
             double mean_y = alpha * ((CyMax + CyMin) / 2.0) + (1 - alpha) * final_y;
-            double delta_x = ((CxMax - CxMin)/2.0) / pow(zoom_inc, actual_zoom);
-            double delta_y = ((CyMax - CyMin)/2.0) / pow(zoom_inc, actual_zoom);
+            double delta_x = ((CxMax - CxMin) / 2.0) / pow(zoom_inc, actual_zoom);
+            double delta_y = ((CyMax - CyMin) / 2.0) / pow(zoom_inc, actual_zoom);
 
             double CxMax_cur = mean_x + delta_x;
             double CxMin_cur = mean_x - delta_x;
@@ -186,11 +186,11 @@ int main(int argc, char *argv[])
         int frame_master = frame_rank - frame_rank % proc_per_zoom;
 
         // new coordinates for current frame
-        double alpha = 1.0/pow(2.0, working_frame);
+        double alpha = 1.0 / pow(2.0, working_frame);
         double mean_x = alpha * ((CxMax + CxMin) / 2.0) + (1 - alpha) * final_x;
         double mean_y = alpha * ((CyMax + CyMin) / 2.0) + (1 - alpha) * final_y;
-        double delta_x = ((CxMax - CxMin)/2.0) / pow(zoom_inc, working_frame);
-        double delta_y = ((CyMax - CyMin)/2.0) / pow(zoom_inc, working_frame);
+        double delta_x = ((CxMax - CxMin) / 2.0) / pow(zoom_inc, working_frame);
+        double delta_y = ((CyMax - CyMin) / 2.0) / pow(zoom_inc, working_frame);
 
         double CxMax_cur = mean_x + delta_x;
         double CxMin_cur = mean_x - delta_x;
@@ -221,6 +221,17 @@ int main(int argc, char *argv[])
         {
             iterations_gathered = (unsigned int *)malloc(iXmax * iYmax * sizeof(unsigned int));
             MPI_Gather(iterations, iXmax * rows_per_proc, MPI_INT, iterations_gathered, iXmax * rows_per_proc, MPI_INT, frame_master, frame_comm);
+            //riempire le righe mancanti
+            unsigned int rem_rows = iYmax % frame_size;
+            printf("Righe in eccesso: %d\n", rem_rows);
+            for (int i = 0; i < iXmax * rem_rows; i++)
+            {
+                Cy = CyMin_cur + ((iYmax - rem_rows) + i / iXmax) * PixelHeight;
+                if (fabs(Cy) < PixelHeight / 2)
+                    Cy = 0.0; // Main antenna
+                Cx = CxMin_cur + (i % iXmax) * PixelWidth;
+                iterations_gathered[(iYmax - rem_rows) * iXmax + i] = mandelbrotIterations(Cx, Cy, IterationMax, ER2);
+            }
         }
         else
         {
