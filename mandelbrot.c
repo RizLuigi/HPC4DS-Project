@@ -70,8 +70,8 @@ int main(int argc, char *argv[])
     arguments.threads = 10;
     arguments.zoom = 4;
     arguments.zoom_factor = 2;
-    arguments.final_x = -1.1428;
-    arguments.final_y = -0.3;
+    arguments.final_x = -1.768778833;
+    arguments.final_y = -0.001738996;
     arguments.resolution = 400;
     arguments.resolution = 2000;
 
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
     //
     const int IterationMax = arguments.iterations;
     // bail-out value , radius of circle ;
-    const double EscapeRadius = 300;
+    const double EscapeRadius = 2.0;
     double ER2 = EscapeRadius * EscapeRadius;
 
     if (comm_sz <= arguments.zoom)
