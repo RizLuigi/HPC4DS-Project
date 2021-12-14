@@ -8,6 +8,7 @@
 #include <argp.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+ #include <unistd.h>
 
 struct argp_option options[] =
     {
@@ -113,7 +114,17 @@ int main(int argc, char *argv[])
     double start, finish, elapsed;
     start = omp_get_wtime();
 
-    mkdir("./frames", 0777);
+    char foldername[50];
+    if (my_rank == 0) {
+        //srand(time(NULL));
+        int r = getpid();
+        sprintf(foldername, "./frames%d", r);
+        mkdir(foldername, 0777);
+    }
+
+    //BROADCAST foldername
+    MPI_Bcast( foldername , 50 , MPI_CHAR , 0 , MPI_COMM_WORLD);
+    
 
     if (comm_sz <= arguments.zoom)
     {   
@@ -159,8 +170,8 @@ int main(int argc, char *argv[])
             }
 
             FILE *fp;
-            char filename[30];
-            sprintf(filename, "frames/zoom%d.ppm", actual_zoom);
+            char filename[100];
+            sprintf(filename, "%s/zoom%d.ppm", foldername, actual_zoom);
             char *comment = "# "; //comment should start with #
             //create new file,give it a name and open it in binary mode
             fp = fopen(filename, "wb"); // b -  binary mode
@@ -215,7 +226,10 @@ int main(int argc, char *argv[])
         double PixelHeight = (CyMax_cur - CyMin_cur) / iYmax;
 
         unsigned int rows_per_proc = iYmax / frame_size;
-        unsigned int iterations[iXmax * rows_per_proc];
+
+        unsigned int (*iterations);
+        iterations = malloc(sizeof(int[iXmax * rows_per_proc]));
+        //unsigned int iterations[iXmax * rows_per_proc];
 
         #ifdef _OPENMP
         #pragma omp parallel for num_threads(arguments.threads) private(Cy, Cx)
@@ -237,7 +251,7 @@ int main(int argc, char *argv[])
             MPI_Gather(iterations, iXmax * rows_per_proc, MPI_INT, iterations_gathered, iXmax * rows_per_proc, MPI_INT, frame_master, frame_comm);
             //riempire le righe mancanti
             unsigned int rem_rows = iYmax % frame_size;
-            printf("Righe in eccesso: %d\n", rem_rows);
+            //printf("Righe in eccesso: %d\n", rem_rows);
             for (int i = 0; i < iXmax * rem_rows; i++)
             {
                 Cy = CyMin_cur + ((iYmax - rem_rows) + i / iXmax) * PixelHeight;
@@ -252,12 +266,14 @@ int main(int argc, char *argv[])
             MPI_Gather(iterations, iXmax * rows_per_proc, MPI_INT, NULL, iXmax * rows_per_proc, MPI_INT, frame_master, frame_comm);
         }
 
+        free(iterations);
+
         //WRITE TO FILE
         if (frame_rank == frame_master)
         {
             FILE *fp;
             char filename[30];
-            sprintf(filename, "frames/zoom%d.ppm", working_frame);
+            sprintf(filename, "%s/zoom%d.ppm", foldername, working_frame);
             char *comment = "# "; //comment should start with #
             //create new file,give it a name and open it in binary mode
             fp = fopen(filename, "wb"); // b -  binary mode
