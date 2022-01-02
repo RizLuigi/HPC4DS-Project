@@ -5,7 +5,7 @@
 |     Name     |  Surname  |    MAT     |
 | :----------: | :-------: | :--------: |
 |    Luigi     | Riz | **223823** |
-| Raffaele |  Pojer   | ** ** |
+| Raffaele |  Pojer   | **224012** |
 
 ## Compiling
 
@@ -42,15 +42,15 @@ $ qsub mandelbrot.sh
 
   Use threadCount threads
   
-  - -x, --final-x=X
+- -x, --final-x=X
 
   Specify horizontal coordinate for the zoom
   
-  - -y, --final-y=Y
+- -y, --final-y=Y
 
   Specify vertical coordinate for the zoom
   
-  - -z, --zooms=zoomCount
+- -z, --zooms=zoomCount
 
   Produce zoomCount images in output
   
