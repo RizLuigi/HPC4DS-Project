@@ -1,4 +1,4 @@
-# Efficent generation of Mandelbrot set imagesequences using MPI and OpenMP
+# Efficent generation of Mandelbrot set image sequences using MPI and OpenMP
 
 ## Members
 
